@@ -1,0 +1,513 @@
+USE [dm_logic_bps]
+GO
+/****** Object:  UserDefinedFunction [dbo].[f_pozew_uzasadnienie_EVEREST_FINANSE_CF1_5025]    Script Date: 2024-02-06 10:49:48 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+
+-- =============================================
+-- Author:		Krzysztof Zielonka
+-- Create date: 07.12.2020
+-- Description:	Uzasadnienie do pozwu
+-- update dla pozwu cf1_szablon_2:		Paweł Głażewski
+-- =============================================
+ALTER FUNCTION [dbo].[f_pozew_uzasadnienie_EVEREST_FINANSE_CF1_5025]
+(
+	@dane XML
+)
+RETURNS VARCHAR(MAX)
+AS
+BEGIN
+--declare @dane XML
+--set @dane = '<sprawa>
+--  <do_data_wystawienia>2023-08-29</do_data_wystawienia>
+--  <kapital>6224.18</kapital>
+--  <odsetki_umowne>1144.66</odsetki_umowne>
+--  <odsetki_karne>0.00</odsetki_karne>
+--  <odsetki_ustawowe>276.55</odsetki_ustawowe>
+--  <koszty>449.92</koszty>
+--  <data_sprzedazy>2023-08-29</data_sprzedazy>
+--  <umowa_cesji_numer>Umowa przelewu wierzytelności zawarta w dniu 29 sierpnia 2023r</umowa_cesji_numer>
+--  <powod>CF1 Niestandaryzowany Fundusz Inwestycyjny Zamknięty Wierzytelności RFI: 1595 z/s w Warszawie</powod>
+--  <powod_adres> ul. PRÓŻNA 9</powod_adres>
+--  <zbywca>EVEREST FINANSE S.A. z/s w POZNAŃ(61-772) przy STARY RYNEK 88</zbywca>
+--  <zbywca_nazwa>EVEREST FINANSE S.A.</zbywca_nazwa>
+--  <licz_dluz>1</licz_dluz>
+--  <uko_typ>3</uko_typ>data
+--  <powod_uwagi>RFI 1595</powod_uwagi>
+--  <sprawa_id>313695</sprawa_id>
+--</sprawa>'
+
+
+--declare @dane xml = 
+--N'<sprawa>
+--  <do_data_wystawienia>2022-09-01</do_data_wystawienia>
+--  <kapital>7050.00</kapital>
+--  <odsetki_umowne>0.00</odsetki_umowne>
+--  <odsetki_karne>0.00</odsetki_karne>
+--  <odsetki_ustawowe>265.15</odsetki_ustawowe>
+--  <koszty>0.00</koszty>
+--  <data_sprzedazy>2023-06-29</data_sprzedazy>
+--  <umowa_cesji_numer>Umowa cesji</umowa_cesji_numer>
+--  <powod>Centrum Finansowe S.A z/s w Warszawie</powod>
+--  <powod_adres> ul. Grzybowska 87</powod_adres>
+--  <zbywca>ASTA-NET S.A. z/s w PIŁA(64-920) przy PODGÓRNA 10</zbywca>
+--  <zbywca_nazwa>ASTA-NET S.A.</zbywca_nazwa>
+--  <licz_dluz>1</licz_dluz>
+--  <uko_typ>3</uko_typ>
+--  <powod_uwagi />
+--  <sprawa_id>312460</sprawa_id>
+--</sprawa>'
+--select dbo.[f_pozew_uzasadnienie_CF1_szablon_astanet](@dane)
+	DECLARE 
+		 @result VARCHAR(MAX)
+		,@data_cesji VARCHAR(15)
+		,@data_wystawienia varchar(10)
+		,@data_wezwania VARCHAR(10)
+		,@powod VARCHAR(1000)
+		,@powod_adres VARCHAR(1000)
+		,@naleznosc_glowna DECIMAL(18,2)
+		,@odsetki_umowne DECIMAL(18,2)
+		,@odsetki_ustawowe DECIMAL(18,2)
+		,@koszty DECIMAL(18,2)
+		,@odsetki_karne DECIMAL(18,2)
+		,@zbywca varchar(max)
+		,@zbywca_nazwa varchar(max)
+		,@umowa_cesji_numer varchar(max)
+		,@licz_dluz int
+		,@ukot_id int
+		,@powod_uwagi varchar(max)
+		,@SPRAWA_ID int
+		,@xml XML = @dane
+		,@naleznosci_txt varchar(max)
+		,@data_wymagalnosci_txt varchar(10)
+		,@waroscSportu DECIMAL(18,2)
+	-- = 
+	--CAST( '<sprawa><do_numer>677/001/06</do_numer><do_data_wystawienia>2006-09-28</do_data_wystawienia><kapital>2180.79</kapital><odsetki_umowne>1355.56</odsetki_umowne><odsetki_karne>0.00</odsetki_karne><odsetki_ustawowe>619.03</odsetki_ustawowe><koszty>336.27</koszty><data_umowy>2006-09-28</data_umowy><data_sprzedazy>2011-02-11</data_sprzedazy><umowa_cesji_numer>BSOŁA/2/02/2011/C</umowa_cesji_numer><powod>Centrum Finansowe Banku BPS S.A. z siedzibą w Warszawa</powod><powod_adres> ul. Plocka 11/13</powod_adres><zbywca>BS Oława z/s w Oława(55-200) przy Pałacowa 13</zbywca><zbywca_nazwa>BS Oława</zbywca_nazwa><licz_dluz>2</licz_dluz></sprawa>'
+	--AS XML)
+	
+	SELECT @data_cesji = R.ref.value('data_sprzedazy[1]','varchar(10)')		
+	,@umowa_cesji_numer =  R.ref.value('umowa_cesji_numer[1]','varchar(max)')		
+	,@data_wystawienia = ref.value('do_data_wystawienia[1]','varchar(10)')		
+	,@data_wezwania = ref.value('data_wezwania[1]','varchar(10)')		
+	,@powod = ref.value('powod[1]','varchar(1000)')
+	,@powod_adres = ref.value('powod_adres[1]','varchar(1000)')
+	,@zbywca = ref.value('zbywca[1]','varchar(max)')
+	,@zbywca_nazwa = ref.value('zbywca_nazwa[1]','varchar(max)')
+	,@naleznosc_glowna = ref.value('kapital[1]', 'decimal(18,2)')				
+	,@odsetki_umowne = ref.value('odsetki_umowne[1]', 'decimal(18,2)')		
+	,@odsetki_karne =ref.value('odsetki_karne[1]', 'decimal(18,2)')		
+	,@odsetki_ustawowe = ref.value('odsetki_ustawowe[1]', 'decimal(18,2)')			
+	,@koszty = ref.value('koszty[1]', 'decimal(18,2)')		
+	,@licz_dluz=ref.value('licz_dluz[1]', 'int')		
+	,@ukot_id=ref.value('uko_typ[1]', 'int')	
+	,@powod_uwagi=ref.value('powod_uwagi[1]','varchar(max)')
+	,@SPRAWA_ID=ref.value('sprawa_id[1]','int')
+	,@naleznosci_txt= ref.value('naleznosci_txt[1]','varchar(max)')
+	,@data_wymagalnosci_txt = ref.value('data_wymagalnosci[1]','varchar(10)')
+	,@waroscSportu = ref.value('wartosc_sporu[1]','decimal(18,2)')
+	FROM  @xml.nodes('//sprawa') AS R(ref)
+
+
+---------------------------------------------------- data zawiadomienia o cesji @data_zaw_cesja
+declare @data_zaw_cesja varchar(255)=(
+select convert (varchar, ISNULL(
+(SELECT TOP 1 convert(varchar(10),re_data_wykonania,126) AS data_zaw_cesja
+FROM akcja
+INNER JOIN (
+	SELECT MAX(re_id) AS max_re_id
+		,re_ak_id
+	FROM rezultat
+	GROUP BY re_ak_id
+	) AS max_rez ON max_rez.re_ak_id = ak_id
+INNER JOIN rezultat r2 ON max_rez.max_re_id = r2.re_id
+INNER JOIN akcja_typ ON ak_akt_id = akt_id
+WHERE ak_akt_id = 1583 -- Zawiadomienie_o_cesji_EVEREST FINANSE_Bocian_5025
+	AND ak_sp_id =@SPRAWA_ID
+ORDER BY data_zaw_cesja DESC)
+,
+(SELECT TOP 1 convert(varchar(10),re_data_wykonania,126) AS data_zaw_cesja
+FROM sprawa_sad_link
+join akcja on ak_sp_id=sad_sp_polubowna
+join (select MAX(re_id) as max_re_id, re_ak_id from rezultat group by re_ak_id) as max_rez on max_rez.re_ak_id=ak_id
+join rezultat r2 on max_rez.max_re_id=r2.re_id
+join akcja_typ on ak_akt_id=akt_id 
+WHERE ak_akt_id = 1583 -- Zawiadomienie_o_cesji_EVEREST FINANSE_Bocian_5025
+	AND sad_sp_sadowa=@SPRAWA_ID
+ORDER BY data_zaw_cesja DESC)
+),104
+))
+
+---------------------------------------------------- wartość sporu
+--DECLARE @kwota_wps decimal(18,2);
+--set @kwota_wps =
+--(SELECT isnull(sum(ksd_kwota_wn),0)
+--FROM ksiegowanie_konto INNER JOIN
+--ksiegowanie_dekret INNER JOIN
+--ksiegowanie ON ksiegowanie_dekret.ksd_ks_id = ksiegowanie.ks_id ON ksiegowanie_konto.ksk_id = ksiegowanie_dekret.ksd_ksk_id INNER JOIN
+--wierzytelnosc INNER JOIN
+--dokument ON wierzytelnosc.wi_id = dokument.do_wi_id INNER JOIN
+--wierzytelnosc_rola ON wierzytelnosc.wi_id = wierzytelnosc_rola.wir_wi_id ON ksiegowanie_dekret.ksd_do_id = dokument.do_id
+--WHERE (wierzytelnosc_rola.wir_sp_id = @SPRAWA_ID) and ks_zamkniete = 1 and ks_kst_id <> 2 and ksd_ksk_id in (2,5,6,7,10) and wi_wt_id = 3)
+---
+--(SELECT isnull(sum(ksd_kwota_ma),0)
+--FROM ksiegowanie_konto INNER JOIN
+--ksiegowanie_dekret INNER JOIN
+--ksiegowanie ON ksiegowanie_dekret.ksd_ks_id = ksiegowanie.ks_id ON ksiegowanie_konto.ksk_id = ksiegowanie_dekret.ksd_ksk_id INNER JOIN
+--wierzytelnosc INNER JOIN
+--dokument ON wierzytelnosc.wi_id = dokument.do_wi_id INNER JOIN
+--wierzytelnosc_rola ON wierzytelnosc.wi_id = wierzytelnosc_rola.wir_wi_id ON ksiegowanie_dekret.ksd_do_id = dokument.do_id
+--WHERE (wierzytelnosc_rola.wir_sp_id = @SPRAWA_ID) and ks_zamkniete = 1 and ks_kst_id = 2 and ksd_ksk_id in (2,5,6,7,10)and wi_wt_id = 3)
+
+---------------------------------------------------- należności
+
+
+
+--declare @naleznosci table (
+--	tytul varchar(max),
+--	numer varchar(max),
+--	kwota decimal(18,2),
+--	data_wystawienia varchar(10)
+--) 
+--insert into @naleznosci
+--select  
+--	do_tytul tytul ,
+--	do_numer  + string_agg(convert (varchar(max),ksd_kwota_ma)+' xx '+ convert (varchar(max),ksd_kwota_wn),'|') numer,
+--	isnull(sum(case when ks_kst_id <> 2 then ksd_kwota_wn else 0 END),0) - isnull(sum(case when ks_kst_id = 2 then ksd_kwota_ma ELSE 0 END),0) kwota,
+--	convert(varchar(10),do_data_wystawienia, 120) data_wystawienia
+--FROM ksiegowanie_konto INNER JOIN
+--ksiegowanie_dekret INNER JOIN
+--ksiegowanie ON ksiegowanie_dekret.ksd_ks_id = ksiegowanie.ks_id ON ksiegowanie_konto.ksk_id = ksiegowanie_dekret.ksd_ksk_id INNER JOIN
+--wierzytelnosc INNER JOIN
+--dokument ON wierzytelnosc.wi_id = dokument.do_wi_id INNER JOIN
+--wierzytelnosc_rola ON wierzytelnosc.wi_id = wierzytelnosc_rola.wir_wi_id ON ksiegowanie_dekret.ksd_do_id = dokument.do_id
+--WHERE (wierzytelnosc_rola.wir_sp_id = 312460) 
+--and ks_zamkniete = 1 
+----and ks_kst_id <> 2 
+--and ksd_ksk_id in (2,5,6,7,10) 
+--and wi_wt_id = 1
+--GROUP BY do_tytul, do_numer, do_data_wystawienia
+--order by do_data_wystawienia, do_tytul, do_numer
+--SELECT * from ksiegowanie_typ
+--INSERT INTO @dowody
+--SELECT min(do_id) do_id_min
+--,do_tytul --,'faktura'
+--, do_numer collate Polish_CI_AI
+--, convert(varchar(10),do_data_wystawienia, 120) 
+--,null
+--,null
+----,'Faktura Vat nr '+  do_numer collate Polish_CI_AI + ' z dnia ' + convert(varchar(10),do_data_wystawienia, 120) 
+--from sprawa
+--join wierzytelnosc_rola on wir_sp_id=sp_id 
+--join dokument on wir_wi_id = do_wi_id and do_dot_id = 1 
+--join wierzytelnosc on wi_id = do_wi_id and wi_wt_id <> 3
+--where sp_id = @SPRAWA_ID
+--GROUP BY do_tytul, do_numer, do_data_wystawienia
+--order by do_data_wystawienia, do_tytul, do_numer
+-----------------------------------------------------------------
+------------------------------------------------------ data zawarcia umowy dluznik / pierw
+--declare @daty_zaw_umow varchar(max)=(select STUFF ((select ', ' + convert(varchar(10),convert(datetime,substring(atw_wartosc,charindex(';',atw_wartosc,0)+1,len(atw_wartosc)),104),126)  from sprawa
+--join wierzytelnosc_rola on wir_sp_id=sp_id
+--join atrybut_wierzytelnosc on atwi_wi_id = wir_wi_id 
+--join atrybut_wartosc on atwi_atw_id = atw_id and atw_att_id = 25
+--where sp_id = @SPRAWA_ID
+--for xml path ('')),1,1,'') )
+
+------------------------------------------------------ nr umowy dluznik / pierw
+--declare @nry_umow varchar(max)=(select STUFF ((select ', umowę nr' + substring(atw_wartosc,0,charindex(';',atw_wartosc,0))  from sprawa
+--join wierzytelnosc_rola on wir_sp_id=sp_id
+--join atrybut_wierzytelnosc on atwi_wi_id = wir_wi_id 
+--join atrybut_wartosc on atwi_atw_id = atw_id and atw_att_id = 25
+--where sp_id = @SPRAWA_ID
+--for xml path ('')) ,1,1,'') )
+
+
+--DECLARE @dowody_umow varchar(max)
+
+--select @dowody_umow  = STRING_AGG(
+--	'	 umowa nr ' + substring(atw_wartosc,0,charindex(';',atw_wartosc,0)) +' z dnia '+convert(varchar(10),convert(datetime,substring(atw_wartosc,charindex(';',atw_wartosc,0)+1,len(atw_wartosc)),104),126),',
+--')
+--from sprawa
+--join wierzytelnosc_rola on wir_sp_id=sp_id
+--join atrybut_wierzytelnosc on atwi_wi_id = wir_wi_id 
+--join atrybut_wartosc on atwi_atw_id = atw_id and atw_att_id = 25
+--where sp_id = @SPRAWA_ID
+
+
+--DECLARE @dowody_uz TABLE(
+--	numer INT IDENTITY (1,1) NOT NULL
+--	,typ VARCHAR(500) NOT NULL
+--	,numerDowodu varchar(1001) null
+--	,dataDowodu varchar(10) NULL
+--	--,FaktStwierdzany VARCHAR(MAX) NULL
+--	--,Opis VARCHAR(MAX) NULL
+--)
+
+--insert into @dowody_uz (typ,numerDowodu, dataDowodu)
+--SELECT isnull(do_tytul,''), isnull(do_numer,''), isnull(CONVERT(VARCHAR(10), do_data_wystawienia,126),'') FROM 
+--wierzytelnosc_rola
+--join wierzytelnosc on wi_id = wir_wi_id
+--JOIN dokument on do_wi_id = wi_id
+--WHERE wir_sp_id = @SPRAWA_ID and wi_wt_id = 1
+--GROUP BY do_tytul, do_numer, do_data_wystawienia
+--order by do_data_wystawienia, do_tytul, do_numer
+
+--INSERT INTO @dowody_uz
+--SELECT 'umowa'
+--, substring(atw_wartosc,0,charindex(';',atw_wartosc,0)) 
+--,substring(atw_wartosc,charindex(';',atw_wartosc,0)+1,len(atw_wartosc)) 
+--,'Umowa świadczenia usług telekomunikacyjnych z dnia'
+--,null
+--from sprawa
+--join wierzytelnosc_rola on wir_sp_id=sp_id
+--join atrybut_wierzytelnosc on atwi_wi_id = wir_wi_id 
+--join atrybut_wartosc on atwi_atw_id = atw_id and atw_att_id = 25
+--where sp_id = @SPRAWA_ID
+
+--INSERT INTO @dowody_uz
+--SELECT 'faktura'
+--, do_numer collate Polish_CI_AI
+--, convert(varchar(10),do_data_wystawienia, 104) 
+--,'Faktura Vat nr'
+--,'z dnia'
+--from sprawa
+--join wierzytelnosc_rola on wir_sp_id=sp_id
+--join wierzytelnosc on wir_wi_id = wi_id
+--join dokument on wir_wi_id = do_wi_id and do_dot_id = 1 
+--where sp_id = @SPRAWA_ID and wi_wt_id = 1
+--order by do_data_wystawienia
+
+--INSERT INTO @dowody_uz
+--SELECT 'inne'
+--,null
+--,null
+--,'Porozumienie nr 1 z dnia 27.05.2020 r. wraz załącznikiem nr 3.'
+--,null
+
+
+--INSERT INTO @dowody_uz
+--SELECT 'inne'
+--,null
+--,null
+--,'Umowa Ramowa Przelewu Wierzytelności z dnia 27.05.2020 r.'
+--,null
+
+
+--INSERT INTO @dowody_uz
+--SELECT 'inne'
+--,null
+--,null
+--,'KRS Orange Polska S.A.'
+--,null
+
+
+--INSERT INTO @dowody_uz
+--SELECT 'inne'
+--,null
+--,null
+--,'KRS Centrum Finansowego S.A.'
+--,null
+
+
+--INSERT INTO @dowody_uz
+--SELECT 'inne'
+--,null
+--,null
+--,'RFI 1595'
+--,null
+
+
+--INSERT INTO @dowody_uz
+--SELECT 'inne'
+--,null
+--,null
+--,'KRS IPOPEMA TFI S.A.'
+--,null
+
+
+--INSERT INTO @dowody_uz
+--SELECT 'inne'
+--,null
+--,@data_zaw_cesja
+--,'Wezwanie do zapłaty wraz z zawiadomieniem o cesji wierzytelności z dnia '
+--,null
+
+--set @data_cesji = isnull(@data_cesji, '!!data cesji!!')
+--set @daty_zaw_umow = isnull(@daty_zaw_umow, '!!daty_zaw_umow!!')
+--set @nry_umow = isnull(@nry_umow, '!!nry_umow!!')
+--set @data_wezwania = isnull(@data_wezwania, '!!data_wezwania!!')
+
+
+--declare @nry_umow varchar(max)=(select STUFF ((select ', ' + substring(atw_wartosc,0,charindex(';',atw_wartosc,0))  from sprawa
+--join wierzytelnosc_rola on wir_sp_id=sp_id
+--join atrybut_wierzytelnosc on atwi_wi_id = wir_wi_id 
+--join atrybut_wartosc on atwi_atw_id = atw_id and atw_att_id = 25
+--where sp_id = @SPRAWA_ID
+--for xml path ('')) ,1,1,'') )
+--select stuff((SELECT  char(13) + char(10)+cast(11 as varchar) + '. ' FOR XML PATH ('')),1,1,'')
+--select stuff((SELECT  char(13) + char(10)+cast(11 as varchar) + '. ' FOR XML PATH ('')),1,2,'')
+--select stuff((SELECT  char(13) + char(10)+cast(11 as varchar) + '. ' FOR XML PATH ('')),1,3,'')
+--select stuff((SELECT  char(13) + char(10)+cast(11 as varchar) + '. ' FOR XML PATH ('')),1,8,'')
+--SELECT  char(13) + char(10)+cast(11 as varchar) + '. ' FOR XML PATH ('')
+
+--declare @uzasadnienie_kwoty nvarchar(max) = @naleznosci_txt
+
+--set @uzasadnienie_kwoty = (select stuff((
+--	SELECT  char(13) + char(10)+cast(rn as varchar) + '. '+ txt from
+--		(SELECT ROW_NUMBER() over(ORDER BY data_wystawienia) rn, ('kwota '+ cast (kwota as varchar(max))+' wynikająca z '+tytul+' '+ numer+' z dnia '+data_wystawienia+'.') txt from @naleznosci)
+--		s1 for xml PATH ('')),1,7,''))
+
+--if (@uzasadnienie_kwoty is null)  
+--	set @uzasadnienie_kwoty = ''
+
+--declare @uzasadnienie_lista_dokumentow nvarchar(max)
+
+--set @uzasadnienie_lista_dokumentow = (select stuff(
+--	(SELECT  char(13) + char(10)+ typ +' nr ' + numerDowodu + ' z dnia ' + dataDowodu from @dowody_uz
+		--(SELECT  'kwota '+ cast (kwota as varchar(max))+' wynikająca z '+tytul+' '+ numer+' z dnia '+data_wystawienia+'.') txt from @dowody_uz)
+		--for xml PATH ('')),1,7,''))
+--set @uzasadnienie_kwoty = (
+--	SELECT  cast(rn as varchar) + '. '+ txt from
+--		(SELECT ROW_NUMBER() over(ORDER BY data_wystawienia) rn, ('kwota '+ cast (kwota as varchar(max))+' wynikająca z '+tytul+' '+ numer+' z dnia '+data_wystawienia+'.') txt from @naleznosci)
+--		s1 for xml PATH (''))
+-----------------------------------------------------------------
+	
+	set @result = '	Na podstawie Umowy cesji wierzytelności z dnia [data_cesji] zawartej pomiędzy Powodem, tj. CF1 Niestandaryzowanym Funduszem Inwestycyjnym Zamkniętym Wierzytelności (dawniej: CF1 Niestandaryzowany Sekurytyzacyjny Fundusz Inwestycyjny Zamknięty) a Cedentem, tj. EVEREST FINANSE S.A. z siedzibą w Poznaniu, CF1 Niestandaryzowany Fundusz Inwestycyjny Zamknięty Wierzytelności stał się pełnoprawnym właścicielem wierzytelności wynikającej z Umowy pożyczki pieniężnej/Ugody restrukturyzacyjnej nr [numer_umowy] z dnia [data_umowy], którą Pozwany zawarł z Wierzycielem pierwotnym.
+	Fakt przejścia uprawnień w stosunku do przedmiotowej wierzytelności potwierdza załącznik nr 4 do ww. umowy sprzedaży wierzytelności, w którym przedmiotowa wierzytelność została zindywidualizowana. Załącznik nr 4 stanowi integralną część Umowy cesji wierzytelności z dnia [data_cesji].
+	Dowód: 
+		1.	Umowa cesji wierzytelności z dnia [data_cesji] wraz załącznikiem nr 4 do tejże umowy.
+
+	Zgodnie z art. 4 ust. 1 ustawy z dnia 27 maja 2004 r. o funduszach inwestycyjnych i zarządzaniu alternatywnymi funduszami inwestycyjnymi (Dz. U. z 2018 r. poz. 1355 ze zm.) Towarzystwo tworzy fundusz inwestycyjny, zarządza nim i reprezentuje fundusz w stosunkach z osobami trzecimi. Ponadto, zgodnie z art. 4 ust. 2 Ustawy Towarzystwo jest organem Funduszu. Wyciąg z rejestru funduszy inwestycyjnych prowadzonego przez Sąd Okręgowy w Warszawie VII Wydział Cywilny Rodzinny i Rejestrowy Sekcja ds. rejestrowych (RFI 1595) wykazuje towarzystwo zarządzające funduszem. Wykazując umocowanie zarządzającego funduszem dołączam wydruk informacji odpowiadający odpisowi pełnemu KRS IPOPEMA TFI S.A.
+	Jednocześnie wskazuję, iż dane zarządzającego Powodem, pełnomocnika Powoda oraz wierzyciela pierwotnego zawarte są w KRS, co zgodnie z dyspozycją art. 228 k.p.c. stanowi informację powszechnie dostępną i nie wymaga dowodu.
+	Dowód: 
+		2.	RFI 1595.
+
+	EVEREST FINANSE S.A. w dniu [data_umowy] zawarł z [dluznik_nazwa] Umowę pożyczki pieniężnej/Ugodę restrukturyzacyjną nr [numer_umowy].
+	Dowód: 
+		3.	Umowa pożyczki pieniężnej/Ugoda restrukturyzacyjna nr [numer_umowy] z dnia [data_umowy]
+
+	W związku z powstałą zaległością oraz brakiem spłaty zadłużenia Wierzyciel pierwotny w dniu [data_wypowiedzenia] wypowiedział Umowę pożyczki pieniężnej/Ugodę restrukturyzacyjną oraz wezwał do zapłaty zadłużenia z zachowaniem 30 - dniowego okresu wypowiedzenia liczonego od dnia doręczenia zawiadomienia o wypowiedzeniu Umowy. Wypowiedzenie Umowy nie spowodowało spłaty zaległości. W związku z powyższym całe zadłużenie stało się wymagalne.
+	Dowód:
+		4.	Wypowiedzenie Umowy pożyczki pieniężnej/Ugody restrukturyzacyjnej.
+
+	Powód równocześnie wskazuje, że powiadomił Pozwanego o cesji wierzytelności wraz z jednoczesnym wezwaniem do dobrowolnej zapłaty wymagalnego roszczenia, jednakże próba polubownego zakończenia sporu na etapie przedsądowym nie przyniosła rezultatu. Pozwany w żaden sposób nie  zareagował na wezwanie Powoda, pomimo wiedzy o istnieniu i wysokości zobowiązania,  nie podjął żadnej próby wyjaśnienia sprawy i jej polubownego załatwienia. Do dnia wniesienia niniejszego pozwu roszczenie Powoda nie zostało uregulowane. 
+	Dowód:
+		5.	Zawiadomienie o cesji wierzytelności z dnia [data_zawiadomienia o cesji]
+
+	Niniejszym pozwem Powód wnosi o zasądzenie na jego rzecz kwoty [wartosc_sporu] zł wraz z odsetkami ustawowymi za opóźnienie od dnia wniesienia pozwu do dnia zapłaty.
+	Jednocześnie Powód wskazuje, że dochodzi roszczenia niespłaconych rat, które nie uległy 3-letniemu terminowi przedawnienia. W związku ze skutecznym wypowiedzeniem Umowy/Ugody, który bezskutecznie upłynął w dniu [data_uplywu_okresu_wypowiedzenia] raty, których termin płatności nie nadszedł stały się wymagalne z dniem wypowiedzenia Umowy/Ugody, tj. [data_wypowiedzenia]. W związku z powyższym Powód w ten sposób wskazał datę wymagalności roszczenia w tabeli opisującej żądanie pozwu.
+
+	Na wysokość dochodzonego pozwem roszczenia składa się niespłacony kapitał w wysokości [kwota_poczatkowa_sprawyP3] zł, koszty [koszty] zł wynikające z prowizji, obsługi terenowej, opłaty przygotowawczej, opłaty za dostarczenie środków, odsetki naliczone zgodnie z treścią Umowy/Ugody przez Wierzyciela pierwotnego do dnia rozliczenia umowy cesji w kwocie [odsetki_umowneP3] zł oraz odsetki ustawowe za opóźnienie naliczone przez Powoda od dnia rozliczenia Umowy cesji do dnia wniesienia pozwu w wysokości [odsetki_ust_biezace_przed] zł z tytułu opóźnienia w spłacie pożyczki.
+	Powód wskazuje, że cała należność z tytułu odsetek została skapitalizowana na dzień wniesienia pozwu.
+	Zgodnie z art. 187 §1 pkt 3 k.p.c., Powód podjął próby polubownego rozwiązania przedmiotowej sprawy, jednakże okazały się one nieskuteczne, co uzasadnia skierowanie sprawy na drogę postępowania sądowego.
+	Mając na uwadze powyższe, wnoszę jak na wstępie.
+	'
+
+	declare
+	@odsetki_umowneP3 varchar(255)
+	, @odsetki_ust_biezace_przed decimal(18,2)
+	, @kwota_poczatkowa_sprawyP3 decimal(18,2)
+	--, @wartoscSporuZaokraglonaPOZEW decimal(18,2)
+	, @data_umowy varchar(255)
+	, @numer_umowy varchar(255)
+	, @data_wypowiedzenia varchar(10)
+	, @dluznik_nazwa varchar(500)
+
+	select @data_wypowiedzenia = atw_wartosc from atrybut_wartosc join atrybut_wierzytelnosc on atw_id = atwi_atw_id join wierzytelnosc on wi_id = atwi_wi_id join wierzytelnosc_rola on wir_wi_id = wi_id where wir_sp_id = @SPRAWA_ID and atw_att_id = 12
+
+	SELECT  @data_umowy= convert(varchar(10),wi_data_umowy,120) , @numer_umowy = wi_numer FROM    wierzytelnosc inner join wierzytelnosc_rola on wir_wi_id = wi_id where wir_sp_id = @SPRAWA_ID and wi_wt_id = 1
+
+	select @odsetki_ust_biezace_przed = odsetki_ust_biezace_przed from dokumenty_pozew_szczegoly(@SPRAWA_ID)
+	-------------------
+	;with v as (
+	select ksd_kwota_ma,ksd_kwota_wn, ks_kst_id,ksd_ksk_id,ks_pierwotne,ksd_data_naliczania_odsetek,wi_data_umowy,wi_numer, wi_wt_id  
+	from  ksiegowanie_dekret 
+	inner join ksiegowanie on ksd_ks_id=ks_id 
+	inner join dokument on do_id=ksd_do_id  
+	inner join wierzytelnosc on wi_id=do_wi_id 
+	inner join wierzytelnosc_rola on wir_wi_id=wi_id 
+	where ks_zamkniete=1 and wir_sp_id=@SPRAWA_ID  and wi_wt_id=1 and ksd_ks_id not in (
+		select ksd_ks_id from ksiegowanie_dekret where ksd_ksk_id=12) 
+	)
+	select @odsetki_umowneP3 = (  select  replace(cast((  (select isnull(SUM(ksd_kwota_wn),0) from v where ks_kst_id in (1,3) and ksd_ksk_id in (6))  - (select isnull(SUM(ksd_kwota_ma),0)
+	from v where ks_kst_id in (2,4) and ksd_ksk_id in (6) ))as money),',','.'))+' zł' 
+	-------------------
+	--select @wartoscSporuZaokraglonaPOZEW = wartoscSporuZaokraglonaPOZEW  from dokumenty_pozew(@SPRAWA_ID)
+	select @kwota_poczatkowa_sprawyP3 =  [Saldo początkowe] from dbo.cache_finanse_info where ID = @SPRAWA_ID
+	select @dluznik_nazwa = LTRIM(RTRIM(isnull(dl_imie,'')+' '+isnull(dl_nazwisko,'')+' '+isnull(dl_firma,''))) from v_sprawa_rola inner join dluznik on dl_id=spr_dl_id where spr_sprt_id = 1 and spr_sp_id=@SPRAWA_ID
+	----------------------------------------------------------------------------
+	--DECLARE @sp_id int = @SPRAWA_ID
+	--set @kwota_poczatkowa_sprawyP3 = 0.0
+
+--DECLARE @Ksiegowania TABLE (
+--wir_sp_id int,
+--wi_id int,
+--ks_pierwotne int,
+--ks_zamkniete int,
+--ks_id int, 
+--ks_kst_id int,
+--ksd_ksk_id int,
+--ksd_do_id int,
+--ksd_kwota_ma decimal(18,2),
+--ksd_kwota_wn decimal(18,2),
+--wi_wt_id int,
+--ks_data_ksiegowania datetime
+--)
+
+--INSERT INTO @Ksiegowania (wir_sp_id, wi_id ,ks_pierwotne ,ks_zamkniete, ks_id, ks_kst_id, ksd_ksk_id, ksd_do_id, ksd_kwota_ma, ksd_kwota_wn, wi_wt_id, ks_data_ksiegowania)
+--SELECT 	wir_sp_id, wi_id ,ks_pierwotne ,ks_zamkniete, ks_id, ks_kst_id, ksd_ksk_id,ksd_do_id, ksd_kwota_ma, ksd_kwota_wn, wi_wt_id, ks_data_ksiegowania
+--FROM ksiegowanie_konto INNER JOIN
+--                      ksiegowanie_dekret INNER JOIN
+--                      ksiegowanie ON ksd_ks_id = ks_id ON ksiegowanie_konto.ksk_id = ksd_ksk_id INNER JOIN
+--                      wierzytelnosc INNER JOIN
+--                      dokument ON wi_id = dokument.do_wi_id INNER JOIN
+--                      wierzytelnosc_rola ON wi_id = wir_wi_id ON ksd_do_id = dokument.do_id	
+--WHERE 	wir_sp_id = @sp_id or wir_sp_id in (select sp2 from dbo.v_kody_finansowe_sprawy_powiazane where sp1 = @sp_id)
+--select * from @Ksiegowania
+--select @kwota_poczatkowa_sprawyP3 = coalesce(
+--								(SELECT     SUM(ksd_kwota_wn) AS Expr1
+--										FROM          @Ksiegowania
+--										WHERE      (wir_sp_id = S.sp_id) AND (ks_zamkniete = 1) AND (ks_pierwotne = 1) AND (wi_wt_id = 1) AND ksd_ksk_id in (2,5,6/*,10*/)
+--								),
+--								(SELECT     SUM(ksd_kwota_wn) AS Expr1
+--										FROM          @Ksiegowania
+--										WHERE      (wir_sp_id = S.sp_id) AND (ks_zamkniete = 1) AND (ks_pierwotne = 1) AND (wi_wt_id = 3) AND ksd_ksk_id in (2,5,6/*,10*/)
+--								)
+--								)
+		--,@koszty = coalesce(
+		--						(SELECT     SUM(ksd_kwota_wn) AS Expr1
+		--								FROM          @Ksiegowania
+		--								WHERE      (wir_sp_id = S.sp_id) AND (ks_zamkniete = 1) AND (ks_pierwotne = 1) AND (wi_wt_id = 1) AND ksd_ksk_id in (2,5,6/*,10*/)
+		--						),
+		--						(SELECT     SUM(ksd_kwota_wn) AS Expr1
+		--								FROM          @Ksiegowania
+		--								WHERE      (wir_sp_id = S.sp_id) AND (ks_zamkniete = 1) AND (ks_pierwotne = 1) AND (wi_wt_id = 3) AND ksd_ksk_id in (2,5,6/*,10*/)
+		--						)
+		--						)
+								--from sprawa s where s.sp_id = @sp_id
+	
+	--------------------------------------------------------------------------------------------------------------------------------------------------------
+	--set @kwota_poczatkowa_sprawyP3 = @naleznosc_glowna
+	
+	set @result = replace(@result, '[data_cesji]', @data_cesji);
+	set @result = replace(@result, '[koszty]', cast(isnull(@koszty,0.00) as varchar(max)));
+	set @result = replace(@result, '[odsetki_ust_biezace_przed]', @odsetki_ust_biezace_przed);
+	set @result = replace(@result, '[odsetki_umowneP3]', @odsetki_umowneP3);
+	--set @result = replace(@result, '[kwota_poczatkowa_sprawyP3]', @kwota_poczatkowa_sprawyP3);
+	set @result = replace(@result, '[kwota_poczatkowa_sprawyP3]', @naleznosc_glowna);
+	--set @result = replace(@result, '[wartoscSporuZaokraglonaPOZEW]', @wartoscSporuZaokraglonaPOZEW);
+	set @result = replace(@result, '[wartosc_sporu]', @waroscSportu);
+	set @result = replace(@result, '[data_zawiadomienia o cesji]', @data_zaw_cesja);
+	set @result = replace(@result, '[data_wypowiedzenia]', @data_wypowiedzenia);
+	set @result = replace(@result, '[dluznik_nazwa]', @dluznik_nazwa);
+
+	set @result = replace(@result, '[data_umowy]', @data_umowy);
+	set @result = replace(@result, '[numer_umowy]', @numer_umowy);
+
+	set @result = replace(@result, '[data_uplywu_okresu_wypowiedzenia]', @data_wymagalnosci_txt) -- ??????????????????
+
+	RETURN @result
+END
+
